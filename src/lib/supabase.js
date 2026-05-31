@@ -29,7 +29,7 @@ export async function getAllFormulas() {
   return { data: data || [], error }
 }
 
-// ── Session config (curated oil IDs) ──────────────────────
+// ── Session config ─────────────────────────────────────────
 
 export async function getSessionOils() {
   const { data } = await supabase
@@ -44,5 +44,41 @@ export async function setSessionOils(ids) {
   const { error } = await supabase
     .from('session_config')
     .upsert([{ id: 1, active_ids: ids, updated_at: new Date().toISOString() }])
+  return error
+}
+
+// ── Oil config (overrides + custom oils) ──────────────────
+
+export async function getOilConfig() {
+  const { data } = await supabase
+    .from('oil_config')
+    .select('*')
+    .eq('active', true)
+  return data || []
+}
+
+export async function upsertOilOverride(oilId, maxDrops) {
+  // Delete existing override for this oil first
+  await supabase.from('oil_config').delete().eq('type', 'override').eq('oil_id', oilId)
+  // Insert new override (null maxDrops = remove cap)
+  if (maxDrops !== null) {
+    const { error } = await supabase.from('oil_config').insert([{
+      type: 'override', oil_id: oilId, tier: '', name: '', max_drops: maxDrops, active: true
+    }])
+    return error
+  }
+  return null
+}
+
+export async function addCustomOil(tier, name, maxDrops) {
+  const id = 'c_' + Date.now()
+  const { error } = await supabase.from('oil_config').insert([{
+    type: 'custom', oil_id: id, tier, name, max_drops: maxDrops || null, active: true
+  }])
+  return error
+}
+
+export async function deleteCustomOil(id) {
+  const { error } = await supabase.from('oil_config').delete().eq('id', id)
   return error
 }
