@@ -3,10 +3,15 @@ import { C, fH } from '../lib/theme.js'
 import { EMPHASIS_OPTIONS, TIERS, TOTAL_DROPS } from '../data/oils.js'
 import { saveFormula } from '../lib/supabase.js'
 
+const SCALES = [
+  { label: '30g', factor: 15 },
+  { label: '45g', factor: 22.5 },
+]
+
 export default function Result({ formula, clientName, emphasis, onEdit, onNew }) {
   const [saved,     setSaved]     = useState(false)
   const [saving,    setSaving]    = useState(false)
-  const [showConv,  setShowConv]  = useState(false)
+  const [scaleIdx,  setScaleIdx]  = useState(null) // null = hidden
   const [saveError, setSaveError] = useState('')
 
   const empLabel = EMPHASIS_OPTIONS.find(e => e.value === emphasis)?.label
@@ -14,15 +19,11 @@ export default function Result({ formula, clientName, emphasis, onEdit, onNew })
   const totalDr  = formula.oils.reduce((s, o) => s + o.drops, 0)
 
   const doSave = async () => {
-    setSaving(true)
-    setSaveError('')
+    setSaving(true); setSaveError('')
     const err = await saveFormula({ clientName, emphasis, oils: formula.oils, warnings: formula.warnings })
     setSaving(false)
-    if (err) {
-      setSaveError('Save failed. Check your connection.')
-    } else {
-      setSaved(true)
-    }
+    if (err) setSaveError('Save failed. Check your connection.')
+    else setSaved(true)
   }
 
   return (
@@ -83,14 +84,12 @@ export default function Result({ formula, clientName, emphasis, onEdit, onNew })
 
       {formula.warnings?.length > 0 && (
         <div style={{ background: '#FFF7F4', border: `1px solid ${C.red}40`, borderRadius: 4, padding: '10px 14px', marginBottom: 14 }}>
-          {formula.warnings.map((w, i) => (
-            <div key={i} style={{ fontSize: 12, color: C.red, lineHeight: 1.65 }}>⚠ {w}</div>
-          ))}
+          {formula.warnings.map((w, i) => <div key={i} style={{ fontSize: 12, color: C.red, lineHeight: 1.65 }}>⚠ {w}</div>)}
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderTop: `1px solid ${C.border}`, marginBottom: 12 }}>
-        <span style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.mid }}>Total</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderTop: `1px solid ${C.border}`, marginBottom: 14 }}>
+        <span style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.mid }}>Total · 2g</span>
         <div style={{ textAlign: 'right' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 3, justifyContent: 'flex-end' }}>
             <span style={{ fontFamily: fH, fontSize: 24 }}>{totalG.toFixed(3)}</span>
@@ -100,15 +99,21 @@ export default function Result({ formula, clientName, emphasis, onEdit, onNew })
         </div>
       </div>
 
-      {/* 30g converter */}
-      <button onClick={() => setShowConv(v => !v)}
-        style={{ width: '100%', padding: '9px 14px', background: C.card, border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11, color: C.mid, cursor: 'pointer', marginBottom: 12, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-        {showConv ? '▲ Hide 30g Scale-Up' : '▼ Scale to 30g (×15)'}
-      </button>
+      {/* Scale-up buttons */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        {SCALES.map((s, i) => (
+          <button key={s.label} onClick={() => setScaleIdx(scaleIdx === i ? null : i)}
+            style={{ flex: 1, padding: '9px 14px', background: scaleIdx === i ? C.dark : C.card, color: scaleIdx === i ? 'white' : C.mid, border: `1px solid ${scaleIdx === i ? C.dark : C.border}`, borderRadius: 4, fontSize: 11, cursor: 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase', transition: 'all 0.15s' }}>
+            Scale to {s.label}
+          </button>
+        ))}
+      </div>
 
-      {showConv && (
+      {scaleIdx !== null && (
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 4, padding: '14px 16px', marginBottom: 14 }}>
-          <div style={{ fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold, marginBottom: 10 }}>30g Formula · ×15</div>
+          <div style={{ fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold, marginBottom: 10 }}>
+            {SCALES[scaleIdx].label} Formula · ×{SCALES[scaleIdx].factor}
+          </div>
           {formula.oils.map(oil => (
             <div key={oil.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: `1px solid ${C.border}` }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -116,7 +121,7 @@ export default function Result({ formula, clientName, emphasis, onEdit, onNew })
                 <span style={{ fontSize: 13 }}>{oil.name}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
-                <span style={{ fontFamily: fH, fontSize: 18 }}>{(oil.g * 15).toFixed(3)}</span>
+                <span style={{ fontFamily: fH, fontSize: 18 }}>{(oil.g * SCALES[scaleIdx].factor).toFixed(3)}</span>
                 <span style={{ fontSize: 10, color: C.mid }}>g</span>
               </div>
             </div>
@@ -124,16 +129,14 @@ export default function Result({ formula, clientName, emphasis, onEdit, onNew })
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8 }}>
             <span style={{ fontSize: 12, color: C.mid }}>Total</span>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
-              <span style={{ fontFamily: fH, fontSize: 20 }}>{(totalG * 15).toFixed(3)}</span>
+              <span style={{ fontFamily: fH, fontSize: 20 }}>{(totalG * SCALES[scaleIdx].factor).toFixed(3)}</span>
               <span style={{ fontSize: 10, color: C.mid }}>g</span>
             </div>
           </div>
         </div>
       )}
 
-      {saveError && (
-        <div style={{ fontSize: 12, color: C.red, marginBottom: 10, textAlign: 'center' }}>{saveError}</div>
-      )}
+      {saveError && <div style={{ fontSize: 12, color: C.red, marginBottom: 10, textAlign: 'center' }}>{saveError}</div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <button onClick={doSave} disabled={saved || saving}

@@ -1,20 +1,25 @@
 import { useState, useEffect } from 'react'
 import { C, fH } from '../lib/theme.js'
 import { ALL_OILS, TIERS, EMPHASIS_OPTIONS } from '../data/oils.js'
-import { getAllFormulas, getSessionOils, setSessionOils } from '../lib/supabase.js'
+import { getAllFormulas, getSessionOils, setSessionOils, getOilConfig, upsertOilOverride, addCustomOil, deleteCustomOil } from '../lib/supabase.js'
 
 const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN || '1234'
 
-export default function Admin({ onSessionUpdate }) {
+export default function Admin({ oilConfig, onSessionUpdate, onOilConfigChange }) {
   const [authed,    setAuthed]    = useState(false)
   const [pin,       setPin]       = useState('')
   const [pinError,  setPinError]  = useState(false)
-  const [adminView, setAdminView] = useState('formulas') // formulas | session
+  const [tab,       setTab]       = useState('formulas')
   const [formulas,  setFormulas]  = useState([])
   const [loading,   setLoading]   = useState(false)
-  const [pending,   setPending]   = useState(null) // { [id]: bool }
+  const [pending,   setPending]   = useState(null)
   const [saving,    setSaving]    = useState(false)
-  const [saveMsg,   setSaveMsg]   = useState('')
+  const [msg,       setMsg]       = useState('')
+
+  // Oil management
+  const [editingMax,  setEditingMax]  = useState({}) // { oilId: draftValue }
+  const [newOil,      setNewOil]      = useState({ tier: 'top', name: '', maxDrops: '' })
+  const [addingOil,   setAddingOil]   = useState(false)
 
   const doLogin = () => {
     if (pin === ADMIN_PIN) { setAuthed(true); loadData() }
@@ -26,43 +31,70 @@ export default function Admin({ onSessionUpdate }) {
     const { data } = await getAllFormulas()
     setFormulas(data || [])
     const ids = await getSessionOils()
-    if (ids) {
-      const obj = {}
-      TIERS.flatMap(t => ALL_OILS[t]).forEach(o => { obj[o.id] = ids.includes(o.id) })
-      setPending(obj)
-    } else {
-      const obj = {}
-      TIERS.flatMap(t => ALL_OILS[t]).forEach(o => { obj[o.id] = true })
-      setPending(obj)
-    }
+    const allIds = TIERS.flatMap(t => ALL_OILS[t].map(o => o.id))
+    const obj = {}
+    allIds.forEach(id => { obj[id] = ids ? ids.includes(id) : true })
+    setPending(obj)
     setLoading(false)
   }
 
+  // Build effective oil list (base + overrides + custom)
+  const effectiveOils = (() => {
+    const result = { top: [], middle: [], base: [] }
+    for (const tier of TIERS) {
+      result[tier] = ALL_OILS[tier].map(o => ({ ...o }))
+    }
+    for (const cfg of oilConfig) {
+      if (cfg.type === 'override') {
+        for (const tier of TIERS) {
+          const oil = result[tier].find(o => o.id === cfg.oil_id)
+          if (oil) oil.maxDrops = cfg.max_drops
+        }
+      } else if (cfg.type === 'custom' && cfg.active) {
+        result[cfg.tier]?.push({ id: cfg.oil_id, name: cfg.name, maxDrops: cfg.max_drops, _configId: cfg.id, isCustom: true })
+      }
+    }
+    return result
+  })()
+
   const doSaveSession = async () => {
-    setSaving(true)
-    setSaveMsg('')
+    setSaving(true); setMsg('')
     const ids = Object.keys(pending).filter(id => pending[id])
     const err = await setSessionOils(ids)
     setSaving(false)
-    if (err) {
-      setSaveMsg('Save failed. Try again.')
-    } else {
-      setSaveMsg('Session saved.')
-      onSessionUpdate(ids)
-      setTimeout(() => setSaveMsg(''), 2000)
-    }
+    if (err) setMsg('Save failed.')
+    else { setMsg('Session saved.'); onSessionUpdate(ids); setTimeout(() => setMsg(''), 2000) }
   }
+
+  const doSaveMax = async (oilId, val) => {
+    const drops = val === '' || val === null ? null : parseInt(val)
+    const err = await upsertOilOverride(oilId, drops)
+    if (!err) { setEditingMax(e => { const n = {...e}; delete n[oilId]; return n }); onOilConfigChange() }
+  }
+
+  const doAddOil = async () => {
+    if (!newOil.name.trim()) return
+    setAddingOil(true)
+    const err = await addCustomOil(newOil.tier, newOil.name.trim(), newOil.maxDrops ? parseInt(newOil.maxDrops) : null)
+    setAddingOil(false)
+    if (!err) { setNewOil({ tier: 'top', name: '', maxDrops: '' }); onOilConfigChange() }
+  }
+
+  const doDeleteOil = async (configId) => {
+    await deleteCustomOil(configId)
+    onOilConfigChange()
+  }
+
+  const flash = m => { setMsg(m); setTimeout(() => setMsg(''), 2000) }
 
   if (!authed) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: C.bg, padding: 24 }}>
       <div style={{ fontFamily: fH, fontSize: 10, letterSpacing: '0.32em', color: C.gold, textTransform: 'uppercase', marginBottom: 8 }}>Sok Studios</div>
       <div style={{ fontFamily: fH, fontSize: 28, fontWeight: 300, marginBottom: 28 }}>Admin</div>
-      <input
-        type="password" value={pin} onChange={e => { setPin(e.target.value); setPinError(false) }}
+      <input type="password" value={pin} onChange={e => { setPin(e.target.value); setPinError(false) }}
         onKeyDown={e => e.key === 'Enter' && doLogin()}
         placeholder="PIN"
-        style={{ width: 160, padding: '12px 16px', border: `1px solid ${pinError ? C.red : C.border}`, borderRadius: 4, fontSize: 18, textAlign: 'center', outline: 'none', letterSpacing: '0.3em', background: C.card, color: C.dark }}
-      />
+        style={{ width: 160, padding: '12px 16px', border: `1px solid ${pinError ? C.red : C.border}`, borderRadius: 4, fontSize: 18, textAlign: 'center', outline: 'none', letterSpacing: '0.3em', background: C.card, color: C.dark }} />
       {pinError && <div style={{ fontSize: 12, color: C.red, marginTop: 8 }}>Incorrect PIN</div>}
       <button onClick={doLogin}
         style={{ marginTop: 16, padding: '12px 32px', background: C.dark, color: 'white', border: 'none', borderRadius: 4, fontSize: 12, letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer' }}>
@@ -72,8 +104,7 @@ export default function Admin({ onSessionUpdate }) {
   )
 
   return (
-    <div style={{ maxWidth: 700, margin: '0 auto', padding: '36px 20px 80px', fontFamily: 'inherit', color: C.dark, minHeight: '100vh' }}>
-
+    <div style={{ maxWidth: 700, margin: '0 auto', padding: '36px 20px 80px', color: C.dark, minHeight: '100vh' }}>
       <div style={{ marginBottom: 28 }}>
         <div style={{ fontFamily: fH, fontSize: 10, letterSpacing: '0.32em', color: C.gold, textTransform: 'uppercase', marginBottom: 4 }}>Sok Studios</div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
@@ -82,22 +113,23 @@ export default function Admin({ onSessionUpdate }) {
         </div>
       </div>
 
-      {/* Nav */}
       <div style={{ display: 'flex', gap: 20, borderBottom: `1px solid ${C.border}`, marginBottom: 26 }}>
-        {[{ v: 'formulas', label: `Formulas (${formulas.length})` }, { v: 'session', label: 'Session Setup' }].map(({ v, label }) => (
-          <button key={v} onClick={() => setAdminView(v)}
-            style={{ background: 'none', border: 'none', padding: '7px 0', marginBottom: -1, fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', cursor: 'pointer', color: adminView === v ? C.dark : '#B0A090', borderBottom: `2px solid ${adminView === v ? C.dark : 'transparent'}`, transition: 'all 0.15s' }}>
+        {[{ v: 'formulas', label: `Formulas (${formulas.length})` }, { v: 'session', label: 'Session' }, { v: 'oils', label: 'Oils' }].map(({ v, label }) => (
+          <button key={v} onClick={() => setTab(v)}
+            style={{ background: 'none', border: 'none', padding: '7px 0', marginBottom: -1, fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', cursor: 'pointer', color: tab === v ? C.dark : '#B0A090', borderBottom: `2px solid ${tab === v ? C.dark : 'transparent'}`, transition: 'all 0.15s' }}>
             {label}
           </button>
         ))}
       </div>
 
+      {msg && <div style={{ fontSize: 12, color: msg.includes('failed') ? C.red : C.gold, marginBottom: 14, textAlign: 'center' }}>{msg}</div>}
+
       {loading && <div style={{ textAlign: 'center', color: C.mid, padding: 40, fontFamily: fH, fontStyle: 'italic' }}>Loading...</div>}
 
-      {/* Formulas */}
-      {!loading && adminView === 'formulas' && (
+      {/* ── FORMULAS ── */}
+      {!loading && tab === 'formulas' && (
         <div>
-          {formulas.length === 0 ? (
+          {!formulas.length ? (
             <div style={{ textAlign: 'center', paddingTop: 60, color: C.mid }}>
               <div style={{ fontFamily: fH, fontSize: 24, fontStyle: 'italic', marginBottom: 8 }}>No formulas yet</div>
             </div>
@@ -125,31 +157,26 @@ export default function Admin({ onSessionUpdate }) {
         </div>
       )}
 
-      {/* Session setup */}
-      {!loading && adminView === 'session' && pending && (
+      {/* ── SESSION ── */}
+      {!loading && tab === 'session' && pending && (
         <div>
           <div style={{ fontSize: 13, color: C.mid, marginBottom: 20 }}>
             {Object.values(pending).filter(Boolean).length} oils active for this session.
-            Clients will only see the oils you activate here.
           </div>
-
           {TIERS.map(tier => {
             const oils = ALL_OILS[tier]
             const cnt  = oils.filter(o => pending[o.id]).length
             return (
               <div key={tier} style={{ marginBottom: 24 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                  <span style={{ fontFamily: fH, fontSize: 18, fontStyle: 'italic' }}>
-                    {tier.charAt(0).toUpperCase() + tier.slice(1)} Note
-                  </span>
+                  <span style={{ fontFamily: fH, fontSize: 18, fontStyle: 'italic' }}>{tier.charAt(0).toUpperCase()+tier.slice(1)} Note</span>
                   <span style={{ fontSize: 11, color: C.gold }}>{cnt}/{oils.length}</span>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {oils.map(oil => {
                     const on = !!pending[oil.id]
                     return (
-                      <button key={oil.id}
-                        onClick={() => setPending(p => ({ ...p, [oil.id]: !p[oil.id] }))}
+                      <button key={oil.id} onClick={() => setPending(p => ({ ...p, [oil.id]: !p[oil.id] }))}
                         style={{ padding: '5px 11px', borderRadius: 20, fontSize: 12, cursor: 'pointer', transition: 'all 0.1s', background: on ? C.dark : C.card, color: on ? 'white' : '#AAA', border: `1px solid ${on ? C.dark : C.border}` }}>
                         {oil.name}
                       </button>
@@ -159,17 +186,84 @@ export default function Admin({ onSessionUpdate }) {
               </div>
             )
           })}
-
-          {saveMsg && (
-            <div style={{ fontSize: 12, color: saveMsg.includes('failed') ? C.red : C.gold, marginBottom: 10, textAlign: 'center' }}>
-              {saveMsg}
-            </div>
-          )}
-
           <button onClick={doSaveSession} disabled={saving}
             style={{ width: '100%', padding: 15, background: C.dark, color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12, letterSpacing: '0.15em', textTransform: 'uppercase' }}>
             {saving ? 'Saving...' : `Save Session (${Object.values(pending).filter(Boolean).length} oils)`}
           </button>
+        </div>
+      )}
+
+      {/* ── OILS ── */}
+      {!loading && tab === 'oils' && (
+        <div>
+          <div style={{ fontSize: 13, color: C.mid, marginBottom: 20 }}>맥스값 수정 및 향료 추가. 1 drop = 0.02g 기준.</div>
+
+          {TIERS.map(tier => (
+            <div key={tier} style={{ marginBottom: 32 }}>
+              <div style={{ fontFamily: fH, fontSize: 18, fontStyle: 'italic', marginBottom: 12 }}>
+                {tier.charAt(0).toUpperCase()+tier.slice(1)} Note
+              </div>
+              {effectiveOils[tier].map(oil => {
+                const isDraft = oil.id in editingMax
+                const draftVal = editingMax[oil.id] ?? ''
+                const currentMax = oil.maxDrops !== undefined ? oil.maxDrops : ''
+                return (
+                  <div key={oil.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', background: C.card, border: `1px solid ${C.border}`, borderRadius: 4, marginBottom: 5 }}>
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <span style={{ fontSize: 13 }}>{oil.name}</span>
+                      {oil.isCustom && <span style={{ fontSize: 9, color: C.gold, letterSpacing: '0.08em' }}>CUSTOM</span>}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 10, color: C.mid, whiteSpace: 'nowrap' }}>max drops</span>
+                      <input
+                        type="number" min="0" max="100"
+                        value={isDraft ? draftVal : currentMax}
+                        placeholder="none"
+                        onChange={e => setEditingMax(prev => ({ ...prev, [oil.id]: e.target.value }))}
+                        style={{ width: 56, padding: '4px 8px', border: `1px solid ${isDraft ? C.gold : C.border}`, borderRadius: 4, fontSize: 12, textAlign: 'center', outline: 'none', background: isDraft ? C.goldLight + '50' : C.bg }}
+                      />
+                      {isDraft && (
+                        <button onClick={() => doSaveMax(oil.id, draftVal)}
+                          style={{ padding: '4px 10px', background: C.dark, color: 'white', border: 'none', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>
+                          Save
+                        </button>
+                      )}
+                      {oil.isCustom && (
+                        <button onClick={() => doDeleteOil(oil._configId)}
+                          style={{ padding: '4px 8px', background: 'none', color: C.red, border: `1px solid ${C.red}40`, borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+
+          {/* Add new oil */}
+          <div style={{ background: C.goldLight + '40', border: `1px solid ${C.goldLight}`, borderRadius: 4, padding: '16px 18px', marginTop: 8 }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: C.gold, marginBottom: 12 }}>Add New Oil</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <select value={newOil.tier} onChange={e => setNewOil(n => ({ ...n, tier: e.target.value }))}
+                style={{ padding: '8px 10px', border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 13, background: C.card, color: C.dark, outline: 'none' }}>
+                <option value="top">Top</option>
+                <option value="middle">Middle</option>
+                <option value="base">Base</option>
+              </select>
+              <input value={newOil.name} onChange={e => setNewOil(n => ({ ...n, name: e.target.value }))}
+                placeholder="Oil name"
+                style={{ flex: 1, minWidth: 140, padding: '8px 12px', border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 13, outline: 'none', background: C.card }} />
+              <input type="number" min="1" value={newOil.maxDrops} onChange={e => setNewOil(n => ({ ...n, maxDrops: e.target.value }))}
+                placeholder="Max drops"
+                style={{ width: 96, padding: '8px 10px', border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 13, outline: 'none', background: C.card, textAlign: 'center' }} />
+              <button onClick={doAddOil} disabled={addingOil || !newOil.name.trim()}
+                style={{ padding: '8px 18px', background: newOil.name.trim() ? C.dark : C.border, color: newOil.name.trim() ? 'white' : C.mid, border: 'none', borderRadius: 4, fontSize: 12, cursor: newOil.name.trim() ? 'pointer' : 'not-allowed', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                {addingOil ? '...' : 'Add'}
+              </button>
+            </div>
+            <div style={{ fontSize: 11, color: C.mid, marginTop: 8 }}>Max drops 비워두면 캡 없음.</div>
+          </div>
         </div>
       )}
     </div>
