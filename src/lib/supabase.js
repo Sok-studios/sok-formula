@@ -10,7 +10,7 @@ export async function getAllFormulas(){
   return{data:data||[],error}
 }
 export async function getSessionConfig(){
-  const{data}=await supabase.from('session_config').select('active_ids,session_password,vial_order').eq('id',1).single()
+  const{data}=await supabase.from('session_config').select('active_ids,session_password,vial_order,available_50ml').eq('id',1).single()
   return data||{}
 }
 export async function setSessionOils(ids){const{error}=await supabase.from('session_config').upsert([{id:1,active_ids:ids,updated_at:new Date().toISOString()}]);return error}
@@ -25,3 +25,8 @@ export async function upsertOilOverride(oilId,maxDrops){
 }
 export async function addCustomOil(tier,name,maxDrops){const id='c_'+Date.now();const{error}=await supabase.from('oil_config').insert([{type:'custom',oil_id:id,tier,name,max_drops:maxDrops||null,active:true}]);return error}
 export async function deleteCustomOil(id){const{error}=await supabase.from('oil_config').delete().eq('id',id);return error}
+
+export async function set50mlAvailability(available){
+  const{error}=await supabase.from('session_config').upsert([{id:1,available_50ml:available,updated_at:new Date().toISOString()}])
+  return error
+}
