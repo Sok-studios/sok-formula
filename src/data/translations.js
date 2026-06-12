@@ -21,7 +21,7 @@ export const T={
     // Name
     name_title:'Before we begin',name_sub:'Tell us a little about yourself',
     name_ph:'Your name',email_ph:'Your email',
-    email_note:'Your formula will be sent to this email',start_btn:'Begin →',
+    email_note:'We\'ll use this to save your formula',start_btn:'Begin →',
     // Instructions
     instr_title:'How to smell',instr_ready:"I'm ready →",
     instr:[
@@ -109,7 +109,7 @@ export const T={
     fname_title:'Give your perfume a name',
     fname_sub:'By naming it, this scent becomes truly yours.',
     fname_ph:'Name your scent',fname_crafted:'Crafted by',
-    fname_btn:'Complete →',fname_skip:'Continue without a name',
+    fname_btn:'Complete →',
     fname_label_note:'This name will be printed on your label.',
     fname_char_note:'Upper/lowercase and special characters are welcome.',
     fname_limit:'20 characters max',
@@ -156,7 +156,7 @@ export const T={
     pwd_error:'코드가 맞지 않아요. 다시 확인해주세요.',pwd_btn:'입장하기',
     name_title:'시작하기 전에',name_sub:'간단하게 알려주세요',
     name_ph:'이름',email_ph:'이메일',
-    email_note:'레시피가 이 이메일로 발송될 거예요',start_btn:'시작하기 →',
+    email_note:'레시피 보관을 위해 사용돼요',start_btn:'시작하기 →',
     instr_title:'시향하는 방법',instr_ready:'준비됐어요 →',
     instr:[
       {title:'거리를 두세요',desc:'향료는 알코올에 희석되어 있어요. 보틀을 얼굴 앞에 살짝 두고 자연스럽게 숨을 쉬어보세요.'},
@@ -230,7 +230,7 @@ export const T={
     fname_title:'향수에 이름을 지어주세요',
     fname_sub:'이름을 붙이면, 이 향수는 진짜 당신 것이 돼요.',
     fname_ph:'향수 이름',fname_crafted:'Crafted by',
-    fname_btn:'완성하기 →',fname_skip:'이름 없이 진행하기',
+    fname_btn:'완성하기 →',
     fname_label_note:'이 이름은 라벨지로 출력돼요.',
     fname_char_note:'대문자, 소문자, 특수문자 모두 가능해요.',
     fname_limit:'최대 20자',
