@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { C, fH } from '../lib/theme.js'
-import { ALL_OILS, TIERS, EMPHASIS_OPTIONS } from '../data/oils.js'
+import { ALL_OILS, TIERS } from '../data/oils.js'
 import { getAllFormulas, getSessionConfig, setSessionOils, setSessionPassword, setVialOrder, getOilConfig, upsertOilOverride, addCustomOil, deleteCustomOil } from '../lib/supabase.js'
 import { SCENT_FAMILIES, DEFAULT_VIAL_ORDER } from '../data/families.js'
 
@@ -164,9 +164,9 @@ export default function Admin({ oilConfig, vialOrder: initVialOrder, onSessionUp
                   <div style={{ fontFamily: fH, fontSize: 20, fontWeight: 300 }}>{item.client_name || '—'}</div>
                   <div style={{ fontSize: 11, color: C.mid, marginTop: 2 }}>
                     {new Date(item.created_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    {' · '}{EMPHASIS_OPTIONS.find(e => e.value === item.emphasis)?.label}
-                    {' · '}{item.total_g?.toFixed(3)}g
+                    {item.perfume_name && <span style={{ color: C.gold }}> · "{item.perfume_name}"</span>}
                   </div>
+                  {item.client_email && <div style={{ fontSize: 11, color: C.mid, marginTop: 1 }}>{item.client_email}</div>}
                 </div>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
