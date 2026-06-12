@@ -28,7 +28,7 @@ export default function BlindSmelling({vialOrder,onDone,onBack}){
           )
         })}
       </div>
-      {selected.size>0&&<div className="fade" style={{fontSize:12,color:C.gold,textAlign:'center',marginBottom:16}}>{selected.size} {t.blind_step.includes('2')?'선택됨':'selected'}</div>}
+      {selected.size>0&&<div className="fade" style={{fontSize:12,color:C.gold,textAlign:'center',marginBottom:16}}>{selected.size} selected</div>}
       <button onClick={handleDone} disabled={selected.size===0}
         style={{width:'100%',padding:16,border:'none',borderRadius:8,background:selected.size>0?C.dark:C.border,color:selected.size>0?'white':C.mid,fontSize:13,letterSpacing:'0.12em',textTransform:'uppercase',cursor:selected.size>0?'pointer':'not-allowed',transition:'all 0.2s',fontFamily:fB}}>
         {t.blind_btn}

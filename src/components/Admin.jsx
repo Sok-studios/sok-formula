@@ -1,7 +1,7 @@
 import{useState,useEffect}from'react'
 import{C,fH,fK,fB}from'../lib/theme.js'
 import{ALL_OILS,TIERS}from'../data/oils.js'
-import{getAllFormulas,getSessionConfig,setSessionOils,setSessionPassword,setVialOrder,getOilConfig,upsertOilOverride,addCustomOil,deleteCustomOil}from'../lib/supabase.js'
+import{getAllFormulas,getSessionConfig,setSessionOils,setSessionPassword,setVialOrder,getOilConfig,upsertOilOverride,addCustomOil,deleteCustomOil,set50mlAvailability}from'../lib/supabase.js'
 import{SCENT_FAMILIES,DEFAULT_VIAL_ORDER}from'../data/families.js'
 import{useLang}from'../context/LangContext.jsx'
 
@@ -23,6 +23,8 @@ export default function Admin({oilConfig,vialOrder:initVials,onSessionUpdate,onO
   const[currentPwd,setCurrentPwd]=useState('')
   const[savingPwd,setSavingPwd]=useState(false)
   const[pendingVials,setPendingVials]=useState(null)
+  const[available50ml,setAvailable50ml]=useState(true)
+  const[saving50ml,setSaving50ml]=useState(false)
   const[savingVials,setSavingVials]=useState(false)
   const[editMax,setEditMax]=useState({})
   const[newOil,setNewOil]=useState({tier:'top',name:'',maxDrops:''})
@@ -45,6 +47,7 @@ export default function Admin({oilConfig,vialOrder:initVials,onSessionUpdate,onO
     setCurrentPwd(cfg.session_password||'')
     setPwdInput(cfg.session_password||'')
     setPendingVials(cfg.vial_order||initVials||DEFAULT_VIAL_ORDER)
+    setAvailable50ml(cfg.available_50ml!==false)
     setLoading(false)
   }
 
@@ -190,6 +193,20 @@ export default function Admin({oilConfig,vialOrder:initVials,onSessionUpdate,onO
               </button>
             </div>
           )}
+          {/* 50ml 가용성 토글 */}
+          <div style={{background:'#FFF',border:`1px solid ${C.border}`,borderRadius:6,padding:'16px',marginBottom:16}}>
+            <div style={{fontSize:10,letterSpacing:'0.18em',textTransform:'uppercase',color:C.mid,marginBottom:10}}>50ml Option</div>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+              <div>
+                <div style={{fontSize:14,color:C.dark}}>{available50ml?(lang==='ko'?'현재 판매 중':'Available'):(lang==='ko'?'현재 품절':'Sold out / Unavailable')}</div>
+                <div style={{fontSize:11,color:C.mid,marginTop:2}}>{lang==='ko'?'손님 화면에 표시 여부':'Shown to guests'}</div>
+              </div>
+              <button onClick={async()=>{const next=!available50ml;setSaving50ml(true);await set50mlAvailability(next);setAvailable50ml(next);setSaving50ml(false);flash(next?'50ml available':'50ml sold out')}}
+                style={{padding:'8px 18px',borderRadius:20,border:'none',background:available50ml?C.gold:C.mid,color:'white',fontSize:12,cursor:'pointer',fontFamily:fB}}>
+                {saving50ml?'...':(available50ml?(lang==='ko'?'품절로 변경':'Mark sold out'):(lang==='ko'?'판매 재개':'Mark available'))}
+              </button>
+            </div>
+          </div>
           <div style={{fontSize:13,color:C.mid,marginBottom:16}}>{Object.values(pending).filter(Boolean).length} {lang==='ko'?'개 향료 활성화됨':'oils active'}</div>
           {TIERS.map(tier=>{
             const tOils=ALL_OILS[tier];const cnt=tOils.filter(o=>pending[o.id]).length

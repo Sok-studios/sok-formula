@@ -1,17 +1,23 @@
+import{useState}from'react'
 import{C,fH,fK,fB}from'../lib/theme.js'
 import{useLang}from'../context/LangContext.jsx'
-import{TIERS}from'../data/oils.js'
+import{TIERS,ALL_OILS}from'../data/oils.js'
 
-export default function Builder({selected,heroes,emphasis,clientName,activeOils,toggleOil,setHeroes,setEmphasis,onBuild,onBack}){
+export default function Builder({selected,heroes,emphasis,clientName,activeOils,toggleOil,setHeroes,setEmphasis,onBuild,onBack,userPickedOils}){
   const{t,lang}=useLang()
   const fHead=lang==='ko'?fK:fH
+  const[showAll,setShowAll]=useState({top:false,middle:false,base:false})
   const totalSel=TIERS.reduce((s,ti)=>s+selected[ti].length,0)
   const noteLabels={top:t.note_top,middle:t.note_mid,base:t.note_base}
+  const isKo=lang==='ko'
+
   return(
     <div>
       {onBack&&<button onClick={onBack} style={{background:'none',border:'none',color:C.gold,fontSize:11,letterSpacing:'0.1em',textTransform:'uppercase',padding:0,cursor:'pointer',marginBottom:20,fontFamily:fB}}>{t.back}</button>}
       {TIERS.map(tier=>{
-        const oils=activeOils(tier)
+        const pickedOils=userPickedOils?userPickedOils[tier]||[]:activeOils(tier)
+        const allOilsForTier=activeOils(tier)
+        const displayOils=showAll[tier]?allOilsForTier:pickedOils
         const sel=selected[tier]
         const heroId=heroes[tier]||sel[0]?.id
         return(
@@ -21,7 +27,7 @@ export default function Builder({selected,heroes,emphasis,clientName,activeOils,
               {sel.length>0&&<span style={{fontSize:11,background:C.goldLight,color:C.gold,borderRadius:20,padding:'2px 8px'}}>{sel.length}/3</span>}
             </div>
             <div style={{display:'flex',flexWrap:'wrap',gap:7}}>
-              {oils.map(oil=>{
+              {displayOils.map(oil=>{
                 const isSel=!!sel.find(o=>o.id===oil.id)
                 const isDis=!isSel&&sel.length>=3
                 const isHero=isSel&&sel.length>1&&oil.id===heroId
@@ -33,6 +39,21 @@ export default function Builder({selected,heroes,emphasis,clientName,activeOils,
                 )
               })}
             </div>
+
+            {/* 전체 향료 보기 버튼 */}
+            {!showAll[tier]&&pickedOils.length<allOilsForTier.length&&(
+              <button onClick={()=>setShowAll(p=>({...p,[tier]:true}))}
+                style={{marginTop:10,background:'none',border:`1px dashed ${C.border}`,borderRadius:20,padding:'5px 14px',fontSize:11,color:C.mid,cursor:'pointer',letterSpacing:'0.06em'}}>
+                {isKo?`+ 전체 ${allOilsForTier.length}개 향료 보기`:`+ Browse all ${allOilsForTier.length} oils`}
+              </button>
+            )}
+            {showAll[tier]&&(
+              <button onClick={()=>setShowAll(p=>({...p,[tier]:false}))}
+                style={{marginTop:10,background:'none',border:`1px dashed ${C.gold}60`,borderRadius:20,padding:'5px 14px',fontSize:11,color:C.gold,cursor:'pointer',letterSpacing:'0.06em'}}>
+                {isKo?'내 픽만 보기':'Show my picks only'}
+              </button>
+            )}
+
             {sel.length>1&&(
               <div style={{marginTop:10,padding:'10px 14px',background:C.goldLight+'40',borderRadius:4,border:`1px solid ${C.goldLight}`}}>
                 <div style={{fontSize:10,letterSpacing:'0.14em',textTransform:'uppercase',color:C.gold,marginBottom:7}}>{t.builder_hero}</div>
